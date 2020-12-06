@@ -4,7 +4,9 @@ import numpy as np
 successes, failures = pygame.init()
 
 WIDTH, HEIGHT = 720, 480
+
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.font.init()
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -15,69 +17,94 @@ COLORS = [(255, 255, 255),
           (128, 0, 255)]
 
 NPLAYERS = 2
-BOARD_SIZE = (6, 7)
 X = 4
 
-CELL_WIDTH = WIDTH / BOARD_SIZE[1]
-CELL_HEIGHT = HEIGHT / BOARD_SIZE[0]
-
-RADIUS = min(CELL_WIDTH, CELL_HEIGHT) / 4
-
 current_player = 1
-board = np.zeros(BOARD_SIZE).astype('int')
-
 game_finished = False
 winner = 0
 
 
-pygame.font.init()
+class Board:
+    def __init__(self, board_size=(6, 7), board_size_in_pixels=(480, 720), position=(0, 0)):
+        self.position = position
+        self.board_height = board_size[0]
+        self.board_width = board_size[1]
+        self.board_height_in_pixels = board_size_in_pixels[0]
+        self.board_width_in_pixels = board_size_in_pixels[1]
 
-def draw_board():
-    for i in range(BOARD_SIZE[0]):
-        for j in range(BOARD_SIZE[1]):
-            color = COLORS[board[i][j]]
-            x = j * CELL_WIDTH + CELL_WIDTH / 2
-            y = i * CELL_HEIGHT + CELL_HEIGHT / 2
-            pygame.draw.circle(screen, color, (x, y), RADIUS)
+        self.cell_height = board_size_in_pixels[0] / self.board_height
+        self.cell_width = board_size_in_pixels[1] / self.board_width
+        self.radius = min(self.cell_width, self.cell_height) / 4
+        self.board = np.zeros(board_size).astype('int')
+        self.board_columns = [pygame.Rect(j * self.cell_width, 0.0, self.cell_width, self.board_height_in_pixels) for j
+                              in range(self.board_width)]
+
+    def draw_board(self):
+        for i in range(self.board_height):
+            for j in range(self.board_width):
+                color = COLORS[self.board[i][j]]
+                x = self.position[1] + j * self.cell_width + self.cell_width / 2
+                y = self.position[0] + i * self.cell_height + self.cell_height / 2
+                pygame.draw.circle(screen, color, (x, y), self.radius)
+
+    def column_clicked(self):
+        position = pygame.mouse.get_pos()
+        clicked_column_ind = [j for j, column in enumerate(self.board_columns) if column.collidepoint(position)]
+        print(clicked_column_ind)
+        if clicked_column_ind:
+            return clicked_column_ind[0]
+
+    def update_board(self):
+        clicked_column_ind = self.column_clicked()
+        if clicked_column_ind is None:
+            return False
+        clicked_column = self.board[:, clicked_column_ind]
+        ind = 0
+        while ind < len(clicked_column) and clicked_column[ind] == 0:
+            ind += 1
+        if ind != 0:
+            self.board[ind - 1, clicked_column_ind] = current_player
+            return True
+        return False
+
+    def check_player_win(self, player):
+        # horizontal
+        for i in range(self.board_height):
+            for j in range(self.board_width - X + 1):
+                if np.all(self.board[i, j:j + X] == player):
+                    return True
+
+        # vertical
+        for i in range(self.board_height - X + 1):
+            for j in range(self.board_width):
+                if np.all(self.board[i:i + X, j] == player):
+                    return True
+
+        # diagonal
+        for i in range(self.board_height - X + 1):
+            for j in range(self.board_width - X + 1):
+                el = self.board[i, j]
+                flag = True
+                for c in range(X):
+                    if el != self.board[i + c, j + c] or self.board[i + c, j + c] != player:
+                        flag = False
+                if flag:
+                    return True
+
+        for i in range(X - 1, self.board_height):
+            for j in range(self.board_width - X + 1):
+                el = self.board[i, j]
+                flag = True
+                for c in range(X):
+                    if el != self.board[i - c, j + c] or self.board[i - c, j + c] != player:
+                        flag = False
+                if flag:
+                    return True
+
+        return False
 
 
-def check_player_win(player):
-    # horizontal
-    for i in range(BOARD_SIZE[0]):
-        for j in range(BOARD_SIZE[1] - X + 1):
-            if np.all(board[i, j:j + X] == player):
-                return True
-
-    # vertical
-    for i in range(BOARD_SIZE[0] - X + 1):
-        for j in range(BOARD_SIZE[1]):
-            if np.all(board[i:i + X, j] == player):
-                return True
-
-    # diagonal
-    for i in range(BOARD_SIZE[0] - X + 1):
-        for j in range(BOARD_SIZE[1] - X + 1):
-            el = board[i, j]
-            flag = True
-            for c in range(X):
-                if el != board[i + c, j + c] or board[i + c, j + c] != player:
-                    flag = False
-            if flag:
-                return True
-
-    for i in range(X-1, BOARD_SIZE[0]):
-        for j in range(BOARD_SIZE[1] - X + 1):
-            el = board[i, j]
-            flag = True
-            for c in range(X):
-                if el != board[i - c, j + c] or board[i - c, j + c] != player:
-                    flag = False
-            if flag:
-                return True
-
-    return False
-
-board_columns = [pygame.Rect(j * CELL_WIDTH, 0.0, CELL_WIDTH, HEIGHT) for j in range(BOARD_SIZE[1])]
+board = Board()
 
 running = True
 while running:
@@ -87,32 +114,21 @@ while running:
             running = False
 
         if event.type == pygame.MOUSEBUTTONDOWN and not game_finished:
-            pos = pygame.mouse.get_pos()
-            clicked_column_ind = [j for j, column in enumerate(board_columns) if column.collidepoint(pos)]
-            if not clicked_column_ind:
-                continue
-            clicked_column_ind = clicked_column_ind[0]
-            clicked_column = board[:, clicked_column_ind]
-            ind = 0
-            while ind < len(clicked_column) and clicked_column[ind] == 0:
-                ind += 1
-            if ind != 0:
-                board[ind - 1, clicked_column_ind] = current_player
+            if board.update_board():
                 current_player = current_player % NPLAYERS + 1
-
-            for player in range(NPLAYERS):
-                win = check_player_win(player+1)
-                if win:
-                    game_finished = True
-                    winner = player+1
-                    break
+                for player in range(NPLAYERS):
+                    win = board.check_player_win(player + 1)
+                    if win:
+                        game_finished = True
+                        winner = player + 1
+                        break
 
     if game_finished:
         myfont = pygame.font.SysFont('Comic Sans MS', 50)
         textsurface = myfont.render('Player {} wins'.format(winner), False, WHITE)
-        screen.blit(textsurface, (WIDTH/2 - 150, HEIGHT/2 - 80))
+        screen.blit(textsurface, (WIDTH / 2 - 150, HEIGHT / 2 - 80))
     else:
-        draw_board()
+        board.draw_board()
     pygame.display.update()  # Or pygame.display.flip()
 
 quit()
