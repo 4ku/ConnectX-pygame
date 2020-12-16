@@ -11,8 +11,8 @@ pygame.font.init()
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
-board = Board()
-game = Game(board)
+board = Board(board_size=(6, 7), board_size_in_pixels=(480, 720), position=(0, 0))
+game = Game(board, nplayers=2, X=4)
 
 running = True
 while running:
@@ -33,5 +33,4 @@ while running:
     else:
         board.draw_board(screen)
     pygame.display.update()  # Or pygame.display.flip()
-
 quit()
